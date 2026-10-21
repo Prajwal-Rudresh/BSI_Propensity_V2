@@ -1,9 +1,13 @@
 # Known Findings and Open Questions
 
-Confirmed defects and open questions for the legacy PG Score pipeline (`legacy/`), combined from
-the Aug 2026 output-file audit, the 2023 design-deck gap analysis, and direct code reading done
-2026-10-16 through 2026-10-19. Each finding below is cited to a file and line — Step 4 should
-re-verify the still-unconfirmed ones against real data before any fix.
+Confirmed defects and open questions for the legacy PG Score pipeline (now the live working copy
+at repo root — see `CLAUDE.md` repo layout; original export preserved at git tag
+`v0-flowise-original`), combined from the Aug 2026 output-file audit, the 2023 design-deck gap
+analysis, and direct code reading done 2026-10-16 through 2026-10-19, plus the
+Dec'25-Feb'26/Jun'26 backtest handoff (2026-10-21, see
+`backtest/2026-06-dec-feb-jun/backtest-plan.md`, F21-F28). Each
+finding below is cited to a file and line — Step 4 should re-verify the still-unconfirmed ones
+against real data before any fix.
 
 Labels: `no-score-change` = safe to fix in normal review. `needs-signoff` = changes delivered
 scores or model inputs; branch + before/after diff + Anwar approval required.
@@ -27,6 +31,10 @@ properties of how the model/label/process currently work, not bugs to fix).
 | [F15](#f15) | Medium | SMOTE crashes if the refi share exceeds `sampling_strategy` | document-only (missing guardrail) |
 | [F18](#f18) | High | Label counts sales/REO/short-sales as refis — regression from older code | needs-signoff |
 | [F19](#f19) | High | Loan-number typing is inconsistent across inputs (int64 vs. uncast) — join/collision risk | needs-signoff if join broken |
+| [F21](#f21) | Medium | Cached training/prediction files have no universe in the name — 2nd universe may reuse 1st's data | no-score-change |
+| [F22](#f22) | High | `"2023-08"` event-date hardcode — ties into F14 | needs-signoff |
+| [F24](#f24) | High | Credit-bureau history months list is hardcoded/scrambled 2021–2023 | needs-signoff |
+| [F25](#f25) | High | Close-reason filter dropped in wired path — ties into F18 | needs-signoff |
 
 ### F1
 `pred_prob` and `y_pred` disagree for ~1/3–37% of loans (Conv Aug26, FHA Aug26, FHA Jul25 all show
@@ -173,6 +181,51 @@ Needs-signoff if confirmed against real data to actually be causing mismatches (
 own code standard already requires loan numbers to be strings everywhere, which this pipeline
 doesn't currently follow in any of its five input sources.
 
+### F21
+**Cached training/prediction files have no universe in the name, so the second universe run may
+reuse the first universe's data.** `training_data_{end}.csv`, `prediction_data_{end}.csv`, and
+`best_model_{end}_{universe}.pkl` are keyed by end date in `run.py:89-110`; the first two omit the
+universe entirely, so running Conventional then FHA (or vice versa) for the same end date risks the
+second run silently scoring on the first universe's cached data. From
+[backtest-plan.md](../../backtest/2026-06-dec-feb-jun/backtest-plan.md), raised 2026-10-21. Fixing
+the cache key (adding universe to the filename) doesn't change any delivered score —
+no-score-change. Not yet confirmed against real data; until fixed, move/rename cached files between
+runs (see `backtest/2026-06-dec-feb-jun/data/real/MANIFEST.md`).
+
+### F22
+**The `"2023-08"` hardcoded event-date default is the same mechanism as F14**, restated from the
+Dec'25-Feb'26/Jun'26 backtest handoff: loans with no matching payoff-reason record always default
+to the June 2023 market rate regardless of real observation month
+(`BuildFeatures_new_features.py:224-229`). See F14 for the full trace — this entry exists only to
+cross-reference the backtest handoff's independent discovery of the same defect. needs-signoff.
+
+### F23
+**The label window is 3 or 4 calendar months, depending on month-start rounding** — both the
+snapshot month and the payoff month are rounded to the 1st before the 0-90-day comparison
+(`BuildFeatures_new_features.py:243-245`), so the effective calendar span varies with where in the
+month the real event fell. document-only: record the behavior; changing the rounding rule would
+change the label itself (needs-signoff if ever revisited).
+
+### F24
+**The credit-bureau history months are a hardcoded, scrambled 2021–2023 list**, not derived from
+the actual observation date (`BuildFeatures_new_features.py:363-399`). Every loan's credit history
+summary is effectively keyed to a fixed, out-of-order historical window regardless of when it's
+actually observed. Fixing this changes a model input for every loan — needs-signoff. Related to
+F13 (same `process_credit_report`/`transform_credit_report_to_time_series` area) but a distinct
+mechanism — F13 is a positional off-by-one from `reset_index()`, F24 is the month-list itself being
+wrong.
+
+### F25
+**The close-reason filter was dropped in the wired path, so the code relies on a pre-filtered,
+refi-only payoff file instead of filtering sales/REO/short-sales itself.** This is the same
+regression as F18, from the other direction: compare `BuildFeatures.py:174-183` (the older,
+unwired code's filter) against the wired `BuildFeatures_new_features.py`, which never applies it.
+Today this is masked as long as the input payoff file (`Combined_Payoff_Data_with_RefinanceYes.xlsx`
+per the backtest plan) is already refi-only by construction upstream — but the code itself has no
+guardrail if that assumption breaks. needs-decision: confirm with Anwar/data engineering whether to
+(a) trust the upstream file is always pre-filtered, documented as such, or (b) restore an in-code
+filter as defense in depth (would need the same `Reason_Closed_Redifn` meaning confirmed as F18).
+
 ## B. Model design (document only)
 
 | # | Severity | Summary | Label |
@@ -185,6 +238,10 @@ doesn't currently follow in any of its five input sources.
 | [F10](#f10) | Security | Tool served over plain HTTP | no-score-change (moot — resolved by leaving the tool) |
 | [F11](#f11) | Critical | Documented model algorithm ≠ wired code — **TO CONFIRM** | document-only |
 | [F16](#f16) | Medium | Training set is 1 row/loan over 11 months, not a 12-month panel | document-only |
+| [F23](#f23) | Medium | Label window is 3 or 4 calendar months, depending on month-start rounding | document-only |
+| [F26](#f26) | High | Backtests leak by design — production trains through the month before the test | document-only |
+| [F27](#f27) | Medium | Optuna is unseeded — retraining doesn't reproduce a delivered model | document-only |
+| [F28](#f28) | Medium | Tool halts if `PayoffReason{test+1}.xlsx` is missing, even on a live run — **TO CONFIRM** | document-only |
 | [F17](#f17) | Medium | Positives/negatives observed at systematically different months | document-only |
 | [F20](#f20) | Medium | Possible right-censoring at `end_date` — **needs production timing confirmation** | document-only |
 
@@ -286,6 +343,30 @@ right-censoring issue, but whether it's a real risk in production depends entire
 forward payoff-reason data is available relative to `end_date`** when a given month's training
 actually runs — not determined by code reading alone. Do not treat as a confirmed defect until
 confirmed with Anwar/data engineering.
+
+### F26
+**Backtests leak by design: production always trains through the month immediately before the
+test month.** From [backtest-plan.md](../../backtest/2026-06-dec-feb-jun/backtest-plan.md): the known Jul 2025 FHA
+backtest (recall 0.716, see `project-background.md`) used this same production window convention,
+which is likely optimistic relative to a real monthly deployment, where the most recent month's
+labels aren't fully resolved yet. document-only here — raise with Anwar; changing the production
+windowing convention is out of scope for this repo.
+
+### F27
+**Optuna is unseeded, so retraining the model doesn't reproduce a previously delivered `.pkl`.**
+Only the train/test split (`random_state=0`) and SMOTE (`42`) are seeded
+(`Modeling/modelTraining.py`, `modelTraining_conventional.py`) — the hyperparameter search itself
+has no seed. This is a reproducibility gap, not a scoring defect: document behavior, and prefer an
+archived `.pkl` over retraining whenever one exists (see `backtest-plan.md` gotchas in
+`backtest/2026-06-dec-feb-jun/`).
+
+### F28
+**Status: TO CONFIRM.** `run.py` halts if `inference_data/PayoffReason{test+1}.xlsx` is missing
+(`:113-114`), including on what would be a live monthly run. Since this file depends on a future
+month's payoff-reason report being available at run time, it's unclear how the actual monthly
+production process satisfies this precondition — e.g. whether the report is pulled with a lag, the
+check is skipped/bypassed in the live path, or the production `run.py` differs from this export.
+Ask Anwar/data engineering; do not assume either answer.
 
 ## Hypotheses tested for F1 (pred_prob / y_pred mismatch)
 

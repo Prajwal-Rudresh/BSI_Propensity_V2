@@ -1,11 +1,12 @@
 # ---- Data: NEVER commit borrower / credit / loan data ----
-data/real/
+# **/ prefix so this matches data/real/ at repo root AND nested, e.g. backtest/*/data/real/
+**/data/real/
 outputs/
 *.xlsx
 *.xls
 *.xlsm
 *.csv
-!data/synthetic/**/*.csv
+!**/data/synthetic/**/*.csv
 *.parquet
 *.feather
 

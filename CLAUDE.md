@@ -14,6 +14,9 @@ Detailed context lives in these files — read the relevant one before starting 
 - @docs/context/known-findings.md — confirmed defects and open questions (from the Aug 2026 audit)
 - @docs/context/scope-and-change-policy.md — what is in/out of scope and what needs sign-off
 - @docs/context/glossary.md — BSI and domain terms
+- @backtest/2026-06-dec-feb-jun/backtest-plan.md — Dec'25-Feb'26 train / Jun'26 test backtest
+  experiment (isolated folder: its own `data/real/` + `data/synthetic/`, never merged/delivered
+  without Anwar sign-off, per the "improved model stays on its own branch or folder" rule)
 
 ---
 
