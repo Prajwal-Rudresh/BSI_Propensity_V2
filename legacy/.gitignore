@@ -1,0 +1,24 @@
+# Data (may contain borrower PII) - do not commit
+*.csv
+*.xlsx
+*.xls
+*.parquet
+data_preperation/Input/
+modeling_data/*.csv
+
+# Model artifacts
+*.pkl
+*.joblib
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

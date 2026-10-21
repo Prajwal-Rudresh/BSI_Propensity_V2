@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./data/real/**)",
+      "Read(./outputs/**)",
+      "Read(./**/*.xlsx)",
+      "Read(./**/*.xls)",
+      "Read(./**/*.pkl)",
+      "Read(./**/*.parquet)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./tests/golden/**)",
+      "Write(./tests/golden/**)",
+      "Edit(./legacy/**)",
+      "Write(./legacy/**)",
+      "Bash(make golden:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ],
+    "allow": [
+      "Bash(make lint:*)",
+      "Bash(make typecheck:*)",
+      "Bash(make test:*)",
+      "Bash(make e2e:*)",
+      "Bash(make synthetic:*)",
+      "Bash(make security:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ]
+  }
+}

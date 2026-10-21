@@ -1,0 +1,59 @@
+# ---- Data: NEVER commit borrower / credit / loan data ----
+data/real/
+outputs/
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+!data/synthetic/**/*.csv
+*.parquet
+*.feather
+
+# ---- Model artifacts (stay inside BSI storage) ----
+*.pkl
+*.pickle
+*.joblib
+models/
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# ---- Notebooks: outputs may contain data ----
+.ipynb_checkpoints/
+
+# ---- Claude Code local (personal) settings ----
+.claude/settings.local.json
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Data - never commit
+data_preperation/Input/
+*.csv
+*.xlsx
+*.parquet
+*.pkl
+.venv/
+.env
+inference_data/
