@@ -89,7 +89,9 @@ Prajwal says the environment is the approved BSI machine.
 ## Repo layout
 
 ```
-legacy/            # ORIGINAL Flowise export + SQL + notes. Read-only reference. Tag v0-flowise-original.
+# The original Flowise export is preserved at git tag `v0-flowise-original` (not a live
+# directory). The files below (Modeling/, data_preperation/, modeling_data/, app.py, etc. at
+# repo root) ARE that export, now the live working copy we edit directly.
 pg_score/          # refactored package (built up in phases)
   config/          # run month, cutoff, paths, universes (YAML)
   ingest/          # load the 6 inputs; parameterized SQL
