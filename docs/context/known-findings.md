@@ -41,6 +41,12 @@ properties of how the model/label/process currently work, not bugs to fix).
 this). Mechanism found — see **F12**. `Modeling/ModelInference.py:271-282`.
 
 ### F5
+**Confirmed again 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest data:** 0.00% nonzero across
+both the same-window (107,764 loans) and production-window (121,493 loans) training sets — still
+exactly zero variance, not an Aug-2026-only artifact. `EscrowPayment_Flag`'s "rare, not broken"
+status also reconfirmed on this data (0.52% / 0.12% nonzero in the two windows, consistent with the
+Jul 2025 backtest's 0.5%). See `backtest/2026-06-dec-feb-jun/reports/eda.md`.
+
 `Flag_Trailing_DaysDiff_GT45` is always 0 (zero variance) across 130K+ loans in every real file
 checked. Suspected cause (unconfirmed against real data): `load_and_preprocess_mck_data` processes
 the source CSV in 100k-row `chunksize` chunks and calls `calculate_flags()` per chunk, so the
@@ -53,6 +59,12 @@ the Jul 2025 backtest shows it fires for 0.5% of loans — it's **rare, not brok
 as a defect.
 
 ### F6
+**Confirmed again 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest data:** 57.2% null
+(same-window) / 65.9% null (production-window) — squarely in the documented 47-67% range. Loan
+numbers on both sides of this join were independently confirmed `int64` (not mixed string/int) on
+this data (see F19 below), so a dtype mismatch isn't this specific gap's cause here — still open
+whether it's a true zero or something else. See `backtest/2026-06-dec-feb-jun/reports/eda.md`.
+
 `Login_Count` is missing for 47–67% of loans across every real file checked. Unconfirmed whether
 that's a true zero (no logins) or a broken join — e.g. the integer-cast of `LoanNumberPlain` after
 stripping a leading `-` (`BuildFeatures_new_features.py:516`, applied again at
@@ -129,6 +141,15 @@ since it changes training behavior.
 >=6 real minority training samples (imbalanced-learn's SMOTE default `k_neighbors=5`).
 
 ### F18
+**Checked 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest's real training payoff file
+(`Combined_Payoff_Data_with_RefinanceYes.xlsx`, 3,020 rows): moot for this specific run.** The file
+is already 100% refi-only by construction — `Refinance` is `Yes` for all 3,020 rows, `ReasonClosed`
+is only `PIF`/`RELEASED` (no sale/REO/short-sale codes), and `Reason Closed_Redfin` values
+(`Off Market`/`Not Found`/`For Rent`) match the older `BuildFeatures.py` filter's whitelist exactly.
+The underlying code defect described below is still real and still present in the wired path (the
+code itself applies no filter) — this just confirms the upstream file masks it for this backtest,
+exactly as F25 anticipated. See `backtest/2026-06-dec-feb-jun/reports/eda.md`.
+
 **Label counts any payoff within 90 days — including sales, REO, and short sales — not just
 refinances. Regression from the older, unwired `BuildFeatures.py`.** `filter_and_clean_final_data()`
 in the wired `BuildFeatures_new_features.py` (`:186-203`) — which cleans the payoff-reasons data
@@ -221,6 +242,9 @@ mechanism — F13 is a positional off-by-one from `reset_index()`, F24 is the mo
 wrong.
 
 ### F25
+**Confirmed 2026-10-22: the "today this is masked" assumption below holds for the real backtest
+data** (see F18's update) — the upstream file is in fact refi-only, not just assumed to be.
+
 **The close-reason filter was dropped in the wired path, so the code relies on a pre-filtered,
 refi-only payoff file instead of filtering sales/REO/short-sales itself.** This is the same
 regression as F18, from the other direction: compare `BuildFeatures.py:174-183` (the older,
@@ -270,6 +294,12 @@ added. File: `data_preperation/Input/Curinos_Interest_Rate_File_2022-2024.csv` (
 and `Modeling/PredictionDataPreperation.py`.
 
 ### F8
+**Confirmed again 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest data:** 14.2% null
+(same-window) / 14.4% null (production-window) — right in the documented range, using the
+provisional (vintage-unconfirmed) `Census_Demographic.csv` copy — see
+`backtest/2026-06-dec-feb-jun/data/real/MANIFEST.md` and this file's Open Questions entry on that
+copy's vintage.
+
 The 3 Census ACS fields are missing 13.6–16% of the time; the vintage of `Census_Demographic.csv`
 is undocumented and not resolvable from code alone. Join logic: `clean_domographic()` / FIPS join
 in `BuildFeatures_new_features.py`. The join itself is `how='left'` and can't silently drop loan
