@@ -148,7 +148,7 @@ credit_report = load_preaggregated_credit_report(credit_report_file_path, CREDIT
 
 Logins = rename_and_transform_logins_columns(logins_df)
 Monthly_Login_Count = count_monthly_logins(Logins)
-Monthly_Login_Count['LoanNumberPlain']=Monthly_Login_Count['LoanNumberPlain'].astype(str).str.replace(r'^-','',regex=True).astype(int)
+Monthly_Login_Count['LoanNumberPlain']=Monthly_Login_Count['LoanNumberPlain'].astype(str).str.replace(r'^-','',regex=True)  # F19 fix: stays string, was .astype(int)
 Monthly_Login_Count['Login_Year_Month'] = pd.to_datetime(Monthly_Login_Count['Login_Year_Month'])
 
 
@@ -174,8 +174,8 @@ Training_Oneoff_Data_Record['Interest_Delta_Current_Market']=(Training_Oneoff_Da
                                              Training_Oneoff_Data_Record['Orginal_Interest_Rate'])
 Training_Oneoff_Data_Record['Ltv_Delta_Orginal_Current']=(Training_Oneoff_Data_Record['Original_Ltv_Calc']-
                                          Training_Oneoff_Data_Record['CurrentLTV'])
-Training_Oneoff_Data_Record=Training_Oneoff_Data_Record.merge(credit_report, how='left',left_on=['LoanNumber'],right_on=['LoanNumber'])
-Training_Oneoff_Data_Record = Training_Oneoff_Data_Record.merge(Monthly_Login_Count, how='left',left_on=['LoanNumber','Year_Month_Obs'],right_on=['LoanNumberPlain','Login_Year_Month'])
+Training_Oneoff_Data_Record=Training_Oneoff_Data_Record.merge(credit_report, how='left',left_on=['LoanNumber'],right_on=['LoanNumber'], validate='one_to_one')
+Training_Oneoff_Data_Record = Training_Oneoff_Data_Record.merge(Monthly_Login_Count, how='left',left_on=['LoanNumber','Year_Month_Obs'],right_on=['LoanNumberPlain','Login_Year_Month'], validate='one_to_one')
 Training_Oneoff_Data_Record.rename(columns = {'CBH':'CREDIT_BUREAU_PAYMENT_HISTORY'}, inplace = True)
 Training_Oneoff_Data_Record['CREDIT_BUREAU_PAYMENT_HISTORY']=Training_Oneoff_Data_Record['CREDIT_BUREAU_PAYMENT_HISTORY'].fillna(0)
 Training_Oneoff_Data_Record=Training_Oneoff_Data_Record[["LoanNumber","LoanType","CREDIT_BUREAU_PAYMENT_HISTORY",

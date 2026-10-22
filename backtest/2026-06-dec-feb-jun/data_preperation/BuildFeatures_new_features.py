@@ -30,6 +30,19 @@ pd.set_option('display.max_columns', None)
 root_directory = './Input/'
 
 
+def normalize_loan_number(series):
+    """F19 backtest fix (2026-10-22): loan numbers as strings everywhere, never floats/ints,
+    per CLAUDE.md's own code standard -- avoids dtype mismatches across join sites (main
+    extract <-> MLW logins <-> credit bureau <-> payoff data <-> monthly label file). Strips
+    whitespace; collapses a float-read artifact ("123.0") down to "123" without altering a
+    genuine string value. Does not change any existing minus-sign-strip or similar
+    transform already present in a caller -- this only fixes the end dtype.
+    """
+    s = series.astype(str).str.strip()
+    float_like = s.str.match(r'^-?\d+\.0$')
+    return s.where(~float_like, s.str.replace(r'\.0$', '', regex=True))
+
+
 # Function to load and preprocess the MCK OneOff data
 def load_and_preprocess_mck_data(file_path, date_column, date_format='mixed', chunk_size=100000):
     """Loads and preprocesses MCK OneOff data in chunks to reduce memory usage."""
@@ -38,6 +51,9 @@ def load_and_preprocess_mck_data(file_path, date_column, date_format='mixed', ch
     for chunk in pd.read_csv(file_path, chunksize=chunk_size):
         # Filter to keep only CURRENT status rows
         chunk = chunk[chunk.DLQ_Status == 'CURRENT']
+
+        # F19 fix: loan number as string from the moment it's read, not int64.
+        chunk['LoanNumber'] = normalize_loan_number(chunk['LoanNumber'])
 
         # Convert the date column to datetime
         chunk[date_column] = pd.to_datetime(chunk[date_column], format=date_format)
@@ -195,7 +211,7 @@ def filter_and_clean_final_data(data):
     """
 
     data.reset_index(inplace=True)
-    data["Loan_Number"] = data["Loan_Number"].astype("int64")
+    data["Loan_Number"] = normalize_loan_number(data["Loan_Number"])  # F19 fix: was astype("int64")
 
     # Remove duplicates based on column 'LoanNumber' keeping the most recent Date_Paid_Off
     data = data.sort_values(by='Date_Paid_Off', ascending=False).drop_duplicates(subset='Loan_Number', keep='first')
@@ -220,7 +236,8 @@ def merge_and_process_data(mck_oneoff_data, payoff_reason_data):
         payoff_reason_data,
         how="left",
         left_on="LoanNumber",
-        right_on="Loan_Number"
+        right_on="Loan_Number",
+        validate="one_to_one",  # F19 fix: both sides confirmed unique per loan on real data
     )
 
     merged_data['Refinance_Sold_Flag'] = merged_data['Refinance_Sold_Flag'].fillna(0)
@@ -462,6 +479,7 @@ def load_preaggregated_credit_report(file_path, snapshot_column):
     out = df[["ACCT_NBR", snapshot_column]].rename(
         columns={"ACCT_NBR": "LoanNumber", snapshot_column: "CBH"}
     )
+    out["LoanNumber"] = normalize_loan_number(out["LoanNumber"])  # F19 fix
     return out
 
 
@@ -557,7 +575,7 @@ def rename_and_transform_logins_columns(logins):
 
     logins['LoginDate'] = pd.to_datetime(logins['LoginDate'], format='mixed')
     logins['Login_Year_Month'] = logins['LoginDate'].dt.strftime('%Y-%m')
-    logins['LoanNumberPlain'] = logins['LoanNumberPlain'].astype(int)
+    logins['LoanNumberPlain'] = normalize_loan_number(logins['LoanNumberPlain'])  # F19 fix: was astype(int)
     print('>>>>> Logins columns renamed and transformed <<<<<<')
     return logins
 

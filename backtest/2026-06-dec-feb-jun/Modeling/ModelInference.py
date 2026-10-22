@@ -17,6 +17,9 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import matplotlib.pyplot as plt
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data_preperation.BuildFeatures_new_features import normalize_loan_number  # F19 fix
+
 # Retrieve parameters from command-line arguments
 #params = json.loads(sys.argv[1])
 
@@ -69,9 +72,15 @@ best_threshold = saved_data["best_threshold"]
 training_feature_columns = saved_data["feature_columns"]
 print("Model loaded successfully!")
 
-test_pred_data = pd.read_csv(os.path.join(files_path, "modeling_data", f"prediction_data_{end_date}.csv"))
+# F19 fix: dtype=str on read -- otherwise a CSV round-trip re-infers a purely-numeric-looking
+# string column back to int64, silently undoing the string-typing fix made at data-prep time.
+test_pred_data = pd.read_csv(
+    os.path.join(files_path, "modeling_data", f"prediction_data_{end_date}.csv"),
+    dtype={"LoanNumber": str},
+)
 test_data = pd.read_excel(os.path.join(files_path, "inference_data", f"PayoffReason{pred_date}.xlsx"))
 test_data['Refi_flag'] = test_data['Refi'].map({'Yes': 1, 'No': 0})
+test_data['Loan Number'] = normalize_loan_number(test_data['Loan Number'])  # F19 fix
 test_data = test_data[['Loan Number', 'Refi_flag']]
 print("Test prediction data and labels loaded successfully!")
 
@@ -111,7 +120,12 @@ test_pred_data = test_pred_data[test_pred_data.LoanType.isin(bucket)]
 test_pred_data['pred_prob'] = predictions
 
 # Perform a left join on the 'ID' column
-test_pred_data = pd.merge(test_pred_data, test_data, how='left', left_on='LoanNumber', right_on='Loan Number')
+test_pred_data = pd.merge(test_pred_data, test_data, how='left', left_on='LoanNumber', right_on='Loan Number', validate='one_to_one')
+# F7 fix: the merge above keeps both join-key columns ('LoanNumber' and the actuals file's
+# 'Loan Number'); the right-hand one is ~99% null by construction (null wherever this loan has
+# no matching refi record, i.e. almost every loan) -- this IS F7's "duplicate, ~100% blank Loan
+# Number column", now root-caused: not a raw-data artifact, just left-join residue. Drop it.
+test_pred_data.drop(columns=['Loan Number'], inplace=True)
 # Fill missing values with 0
 test_pred_data['Refi_flag'] = test_pred_data['Refi_flag'] .fillna(0)
 

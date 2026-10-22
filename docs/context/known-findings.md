@@ -24,13 +24,13 @@ properties of how the model/label/process currently work, not bugs to fix).
 | [F1](#f1) | Critical | `pred_prob`/`y_pred` disagree for ~1/3–37% of loans | needs-signoff |
 | [F5](#f5) | High | `Flag_Trailing_DaysDiff_GT45` is always 0 | needs-signoff |
 | [F6](#f6) | High | `Login_Count` missing for 47–67% of loans | needs-signoff if join broken |
-| [F7](#f7) | Medium | Duplicate, blank "Loan Number" column | needs-signoff if affects joins |
+| [F7](#f7) | Medium | Duplicate, blank "Loan Number" column — root-caused: left-join residue, fixed | no-score-change |
 | [F12](#f12) | Critical | F1's mechanism: hardcoded 0.025 threshold + 3 override rules | needs-signoff |
 | [F13](#f13) | High | Credit-history slice drops oldest column, zero-fills newest | needs-signoff |
 | [F14](#f14) | High | `Interest_Delta_Current_Market` uses a hardcoded lookup date for ~97% of loans | needs-signoff |
 | [F15](#f15) | Medium | SMOTE crashes if the refi share exceeds `sampling_strategy` | document-only (missing guardrail) |
 | [F18](#f18) | High | Label counts sales/REO/short-sales as refis — regression from older code | needs-signoff |
-| [F19](#f19) | High | Loan-number typing is inconsistent across inputs (int64 vs. uncast) — join/collision risk | needs-signoff if join broken |
+| [F19](#f19) | High | Loan-number typing is inconsistent across inputs — fixed, no live impact confirmed on this data | no-score-change |
 | [F21](#f21) | ~~Medium~~ | ~~Cached training/prediction files have no universe in the name~~ — **retracted, see detail: not a defect** | n/a |
 | [F22](#f22) | High | `"2023-08"` event-date hardcode — ties into F14 | needs-signoff |
 | [F24](#f24) | High | Credit-bureau history months list is hardcoded/scrambled 2021–2023 | needs-signoff |
@@ -62,10 +62,13 @@ as a defect.
 
 ### F6
 **Confirmed again 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest data:** 57.2% null
-(same-window) / 65.9% null (production-window) — squarely in the documented 47-67% range. Loan
-numbers on both sides of this join were independently confirmed `int64` (not mixed string/int) on
-this data (see F19 below), so a dtype mismatch isn't this specific gap's cause here — still open
-whether it's a true zero or something else. See `backtest/2026-06-dec-feb-jun/reports/eda.md`.
+(same-window) / 65.9% null (production-window) — squarely in the documented 47-67% range.
+**Dtype mismatch ruled out as this gap's cause, not just unconfirmed:** after applying F19's fix
+(loan numbers as consistent strings everywhere), the null rate stayed at 57.2% — unchanged to the
+decimal. Loan numbers on both sides of this join were already `int64` on both sides before the fix
+too (see F19), so there was no live dtype mismatch to begin with on this data. Still open: whether
+missing `Login_Count` is a true zero (no logins that month) or some other broken-join mechanism not
+yet identified. See `backtest/2026-06-dec-feb-jun/reports/eda.md`.
 
 `Login_Count` is missing for 47–67% of loans across every real file checked. Unconfirmed whether
 that's a true zero (no logins) or a broken join — e.g. the integer-cast of `LoanNumberPlain` after
@@ -77,11 +80,23 @@ is built by `count_monthly_logins()` in `BuildFeatures_new_features.py` and merg
 `['LoanNumber','Year_Month_Obs'] = ['LoanNumberPlain','Login_Year_Month']`.
 
 ### F7
+**Root-caused 2026-10-22 against the real Dec'25-Feb'26/Jun'26 backtest: confirmed, and it's left-
+join residue, not a raw-data artifact.** `ModelInference.py:123`'s label merge
+(`left_on='LoanNumber', right_on='Loan Number'`) keeps *both* join-key columns in its output by
+default. Checked directly: the scored output has `LoanNumber`, `LoanType`, and `Loan Number` —
+the last one **99.3% null**, because it's only non-null where a loan has a matching refi record in
+the actuals file (the large majority don't). This fully explains "duplicate, ~100% blank Loan
+Number column" without needing to assume a raw-input data-quality issue.
+**Fixed** (backtest copy, `ModelInference.py`): drop the redundant `Loan Number` column right after
+the merge. no-score-change — doesn't touch `pred_prob`/`y_pred`/thresholds, just removes a
+redundant, confusing output column.
+
 A duplicate "Loan Number" column, ~100% blank, appears in every real file checked — join-key
-fragmentation. Not yet traced to its origin in the six-input pipeline itself;
-`combine_predictions.py` (the Conv+FHA report combiner) defensively accepts either `LoanNumber` or
-`Loan Number`, suggesting downstream awareness of the duplicate without explaining where it comes
-from.
+fragmentation. `combine_predictions.py` (the Conv+FHA report combiner) defensively accepts either
+`LoanNumber` or `Loan Number`, suggesting downstream awareness of the duplicate without explaining
+where it comes from — now explained above for this backtest's own scored output, though whether
+the *production* files checked in the original Aug 2026 audit have the exact same mechanism or a
+different one is still open.
 
 ### F12
 **F1's mechanism.** `y_pred` is not `pred_prob >= saved best_threshold` — `ModelInference.py` loads
@@ -177,6 +192,22 @@ distinguished via `Reason_Closed_Redifn`" claim. Fixing this changes delivered l
 (needs-signoff).
 
 ### F19
+**Fixed 2026-10-22 (backtest copy, all 5 input sources + the monthly label file).** Added
+`normalize_loan_number()` (`BuildFeatures_new_features.py`) applied at every loan-number origin
+point (main extract, credit bureau `ACCT_NBR`, MLW logins, payoff-reason files, the monthly label
+file in `ModelInference.py`), plus `dtype={'LoanNumber': str}` on every CSV read-back (a string
+column does NOT survive a CSV round-trip without this — pandas re-infers a purely-numeric-looking
+string back to `int64` on the next read, silently undoing the fix), plus `validate='one_to_one'`
+on every loan-level merge (credit bureau, logins, payoff label, monthly actuals) after confirming
+each side is actually unique (zero duplicates checked empirically on real data). Verified: row
+counts unchanged after the fix (no silent row multiplication from the `validate=` additions), loan
+numbers are `object` dtype everywhere now. On *this* real data the fix didn't change any numbers
+(F6's `Login_Count` null rate stayed at 57.2%, confirming no live dtype mismatch was actually
+occurring here) — the value is defensive correctness for data where leading zeros or mixed types
+would otherwise bite, and it's now in place rather than assumed safe. The minus-sign-strip for MLW
+logins was kept exactly as-is (no negative loan numbers exist in this real data, confirmed
+empirically, so nothing to decide there) — only the end dtype changed, from `int` to `str`.
+
 **Loan-number typing is inconsistent across every input source — a real, demonstrated join/collision
 risk, not just a hypothesis.** No explicit `dtype`/converter is set when reading the main loan
 extract (`BuildFeatures_new_features.py:38`, `pd.read_csv(..., chunksize=chunk_size)`) or the
