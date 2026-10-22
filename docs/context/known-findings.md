@@ -22,7 +22,7 @@ properties of how the model/label/process currently work, not bugs to fix).
 | # | Severity | Summary | Label |
 |---|---|---|---|
 | [F1](#f1) | Critical | `pred_prob`/`y_pred` disagree for ~1/3–37% of loans | needs-signoff |
-| [F5](#f5) | High | `Flag_Trailing_DaysDiff_GT45` is always 0 | needs-signoff |
+| [F5](#f5) | High | `Flag_Trailing_DaysDiff_GT45` is always 0 — fixed, mixed before/after result | needs-signoff |
 | [F6](#f6) | High | `Login_Count` missing for 47–67% of loans | needs-signoff if join broken |
 | [F7](#f7) | Medium | Duplicate, blank "Loan Number" column — root-caused: left-join residue, fixed | no-score-change |
 | [F12](#f12) | Critical | F1's mechanism: hardcoded 0.025 threshold + 3 override rules | needs-signoff |
@@ -43,6 +43,24 @@ properties of how the model/label/process currently work, not bugs to fix).
 this). Mechanism found — see **F12**. `Modeling/ModelInference.py:271-282`.
 
 ### F5
+**Fixed and measured 2026-10-22 (backtest copy, needs-signoff per scope-and-change-policy.md).**
+Moved the `calculate_flags()` call from inside the per-chunk loop in `load_and_preprocess_mck_data`
+to after all chunks are concatenated, so the trailing-6-month self-merge runs on the full,
+loan-complete dataset instead of fragments. Verified safe first: ran in isolation (~33s, no memory
+issues) before touching the full pipeline. Result: `Flag_Trailing_DaysDiff_GT45` jumped from 0.00%
+to **21.7% nonzero** (23,430 of 107,764 loans, same-window) — far more common than guessed by
+analogy to `EscrowPayment_Flag`'s rarity (likely picking up benign irregular-payment-timing
+patterns, not just true delinquency, given the data is pre-filtered to `DLQ_Status == 'CURRENT'`).
+
+**Before/after impact (both windows retrained, both universes, all row counts unchanged):**
+Recall/Precision/%flagged barely moved anywhere (expected — F12's threshold/override mechanism is
+still untouched, still governing the final Yes/No decision). Ranking quality (AUC/KS) moved, but
+**mixed, not uniformly better**: FHA same-window improved (AUC 0.676→0.683, KS 0.290→0.327);
+**Conventional same-window got worse** (AUC 0.649→0.615, KS 0.229→0.192); the other two combos were
+roughly a wash. **Cannot fully attribute this to the fix** vs. retraining noise — F27 (Optuna
+unseeded) means every retrain already varies randomly, and this is exactly the kind of mixed result
+where that confound matters. Documented honestly rather than cherry-picking the FHA win.
+
 **Confirmed again 2026-10-22 against the Dec'25-Feb'26/Jun'26 backtest data:** 0.00% nonzero across
 both the same-window (107,764 loans) and production-window (121,493 loans) training sets — still
 exactly zero variance, not an Aug-2026-only artifact. `EscrowPayment_Flag`'s "rare, not broken"

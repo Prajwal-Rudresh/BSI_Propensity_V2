@@ -61,9 +61,6 @@ def load_and_preprocess_mck_data(file_path, date_column, date_format='mixed', ch
         # Extract Year-Month from the date
         chunk['Year_Month_Obs'] = chunk[date_column].dt.strftime('%Y-%m')
 
-        # Process flags for this chunk
-        chunk = calculate_flags(chunk)
-
         # Append to list of chunks
         chunks.append(chunk)
 
@@ -73,6 +70,13 @@ def load_and_preprocess_mck_data(file_path, date_column, date_format='mixed', ch
     # Combine all chunks
     if chunks:
         df = pd.concat(chunks, ignore_index=True)
+        # F5 fix (2026-10-22, needs-signoff): calculate_flags() does a trailing-6-month
+        # self-merge per loan. It used to run INSIDE the per-chunk loop above, so a loan's
+        # own history (split across many 100k-row chunks by file position, not by loan) was
+        # never visible to its own self-merge -- Flag_Trailing_DaysDiff_GT45 was structurally
+        # guaranteed to be 0 for every loan. Now runs once on the full, combined, loan-complete
+        # dataset instead.
+        df = calculate_flags(df)
         return df
     else:
         print("Warning: No data met the filtering criteria")
