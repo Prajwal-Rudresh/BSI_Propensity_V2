@@ -78,7 +78,26 @@ imputer = SimpleImputer(strategy='mean')
 X_train_imputed = imputer.fit_transform(X_train)
 
 # Resample training data to balance classes using SMOTE
-smote = SMOTE(random_state=42, sampling_strategy=0.1) #auto") #0.5)  #1)
+SMOTE_SAMPLING_STRATEGY = 0.1  # FHA
+# F15 fix (2026-10-22, guardrail, no behavior change on this data): SMOTE's sampling_strategy
+# is a CEILING on the minority:majority ratio -- it can only oversample up to that ratio, never
+# down to it. If the real training window's refi share already exceeds this ceiling (a genuine
+# refi boom, or a date-window mistake), fit_resample() crashes with an opaque error. Check first
+# and fail with a clear message instead. Confirmed via EDA this data's actual ratio (~0.02-0.03)
+# is well under 0.1, so this never fires here -- it's a guardrail for different data, not a fix
+# to anything currently broken.
+minority_count = int(y_train.sum())
+majority_count = int(len(y_train) - minority_count)
+actual_ratio = minority_count / majority_count if majority_count > 0 else float("inf")
+if actual_ratio >= SMOTE_SAMPLING_STRATEGY:
+    raise ValueError(
+        f"F15 guardrail: training refi:non-refi ratio ({actual_ratio:.4f}) already meets or "
+        f"exceeds SMOTE's sampling_strategy ceiling ({SMOTE_SAMPLING_STRATEGY}) -- SMOTE can only "
+        f"oversample UP to that ratio, not down to it. This would otherwise crash inside "
+        f"fit_resample() with an opaque error. Needs a decision (raise sampling_strategy? reduce "
+        f"the training window?), not a silent crash."
+    )
+smote = SMOTE(random_state=42, sampling_strategy=SMOTE_SAMPLING_STRATEGY)
 X_train_resampled, y_train_resampled = smote.fit_resample(X_train_imputed, y_train)
 
 

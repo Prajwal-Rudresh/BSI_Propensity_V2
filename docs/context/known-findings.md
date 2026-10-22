@@ -28,7 +28,7 @@ properties of how the model/label/process currently work, not bugs to fix).
 | [F12](#f12) | Critical | F1's mechanism: hardcoded 0.025 threshold + 3 override rules | needs-signoff |
 | [F13](#f13) | High | Credit-history slice drops oldest column, zero-fills newest | needs-signoff |
 | [F14](#f14) | High | `Interest_Delta_Current_Market` uses a hardcoded lookup date for ~97% of loans | needs-signoff |
-| [F15](#f15) | Medium | SMOTE crashes if the refi share exceeds `sampling_strategy` | document-only (missing guardrail) |
+| [F15](#f15) | Medium | SMOTE crashes if the refi share exceeds `sampling_strategy` — guardrail added, verified no-op | no-score-change |
 | [F18](#f18) | High | Label counts sales/REO/short-sales as refis — regression from older code | needs-signoff |
 | [F19](#f19) | High | Loan-number typing is inconsistent across inputs — fixed, no live impact confirmed on this data | no-score-change |
 | [F21](#f21) | ~~Medium~~ | ~~Cached training/prediction files have no universe in the name~~ — **retracted, see detail: not a defect** | n/a |
@@ -159,6 +159,14 @@ this from crashing or nulling out, it just makes the feature far less time-varyi
 implies. Not yet checked against real data. Fixing changes a model input for the majority of loans.
 
 ### F15
+**Guardrail added 2026-10-22 (backtest copy), verified true no-op on this data.** Added an explicit
+ratio check before `smote.fit_resample()` in both `modelTraining.py` and
+`modelTraining_conventional.py` — raises a clear `ValueError` naming the actual vs. ceiling ratio
+instead of letting SMOTE crash opaquely, if it would ever be exceeded. Verified harmless: retrained
+all 4 combinations after adding it, every cross-validation score came back byte-for-byte identical
+to the pre-guardrail seeded run — confirms it never fires on this data (actual ratios ~0.01-0.03,
+both universes, both windows, well under the 0.1/0.2 ceilings).
+
 **Candidate finding, reproduced but not yet checked against real production data.** Training
 crashes outright if the refi share in the training window exceeds SMOTE's `sampling_strategy`
 ceiling for that universe (e.g. a genuine refi boom, or a date-window mistake that concentrates too

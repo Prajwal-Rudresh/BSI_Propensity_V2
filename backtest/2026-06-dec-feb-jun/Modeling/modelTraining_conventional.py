@@ -78,7 +78,21 @@ imputer = SimpleImputer(strategy='mean')
 X_train_imputed = imputer.fit_transform(X_train)
 
 # Resample training data to balance classes using SMOTE
-smote = SMOTE(random_state=42, sampling_strategy= 0.2) #0.5)  #1)
+SMOTE_SAMPLING_STRATEGY = 0.2  # Conventional
+# F15 fix (2026-10-22): see modelTraining.py for the full explanation -- guardrail only, no
+# behavior change on this data (actual ratio ~0.01-0.02, well under this ceiling).
+minority_count = int(y_train.sum())
+majority_count = int(len(y_train) - minority_count)
+actual_ratio = minority_count / majority_count if majority_count > 0 else float("inf")
+if actual_ratio >= SMOTE_SAMPLING_STRATEGY:
+    raise ValueError(
+        f"F15 guardrail: training refi:non-refi ratio ({actual_ratio:.4f}) already meets or "
+        f"exceeds SMOTE's sampling_strategy ceiling ({SMOTE_SAMPLING_STRATEGY}) -- SMOTE can only "
+        f"oversample UP to that ratio, not down to it. This would otherwise crash inside "
+        f"fit_resample() with an opaque error. Needs a decision (raise sampling_strategy? reduce "
+        f"the training window?), not a silent crash."
+    )
+smote = SMOTE(random_state=42, sampling_strategy=SMOTE_SAMPLING_STRATEGY)
 X_train_resampled, y_train_resampled = smote.fit_resample(X_train_imputed, y_train)
 
 
