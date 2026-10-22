@@ -271,6 +271,7 @@ filter as defense in depth (would need the same `Reason_Closed_Redifn` meaning c
 | [F26](#f26) | High | Backtests leak by design — production trains through the month before the test | document-only |
 | [F27](#f27) | Medium | Optuna is unseeded — retraining doesn't reproduce a delivered model | document-only |
 | [F28](#f28) | Medium | Tool halts if `PayoffReason{test+1}.xlsx` is missing, even on a live run — **TO CONFIRM** | document-only |
+| [F29](#f29) | High | Production-window baseline: 6.8% of loans have a label-visibility gap vs. `payoff_data`'s start date | document-only |
 | [F17](#f17) | Medium | Positives/negatives observed at systematically different months | document-only |
 | [F20](#f20) | Medium | Possible right-censoring at `end_date` — **needs production timing confirmation** | document-only |
 
@@ -402,6 +403,24 @@ month's payoff-reason report being available at run time, it's unclear how the a
 production process satisfies this precondition — e.g. whether the report is pulled with a lag, the
 check is skipped/bypassed in the live path, or the production `run.py` differs from this export.
 Ask Anwar/data engineering; do not assume either answer.
+
+### F29
+**New, confirmed 2026-10-22 while reviewing the EDA script: the production-window backtest
+baseline has a real label-visibility gap for ~6.8% of its loans, not just a theoretical
+right-censoring risk (compare F20).** The production window (`st_date="2025-06"`, exclusive,
+`end_date="2026-05"`) keeps each loan's row from its *last* observed `Year_Month_Obs` in that
+range (`BuildFeatures_new_features.py:101-102`, "last month in window"). Checked directly against
+the real trimmed one-off extract: of 123,047 loans in the production window, **8,374 (6.8%) have
+their last-observed month before December 2025** — i.e. they exited the monthly servicing extract
+(paid off, transferred, or otherwise stopped appearing) in Jul-Nov 2025. Our real `payoff_data`
+file (the training label source for this backtest) only starts **December 2025** — so if any of
+these 8,374 loans genuinely refinanced in Aug-Nov 2025, there's no payoff record to match against,
+and `merge_and_process_data()` labels them `0` (no refi) purely because that payoff predates our
+data pull, not because it didn't happen. This affects only the **production-window baseline**, not
+the same-window baseline (Dec'25-Feb'26, entirely within `payoff_data`'s coverage) — so it risks
+understating the production baseline's true recall/base-rate specifically, which matters when
+comparing it against the same-window baseline and the eventual improved model. Does not change any
+code; it's a backtest data-coverage limitation to caveat in the Step 8 sign-off report, not a fix.
 
 ## Hypotheses tested for F1 (pred_prob / y_pred mismatch)
 

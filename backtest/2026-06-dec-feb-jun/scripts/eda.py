@@ -126,10 +126,17 @@ def dtype_audit() -> list[str]:
     for path, col in checks:
         try:
             if path.suffix.lower() == ".csv":
-                head = pd.read_csv(path, nrows=5000, usecols=[col])
+                # Full-file scan, not just a head sample -- a CSV can have the dtype shift
+                # partway through (e.g. a later chunk containing a non-numeric value), which
+                # a nrows=5000 sample would silently miss.
+                dtypes_seen = set()
+                for chunk in pd.read_csv(path, usecols=[col], chunksize=500_000):
+                    dtypes_seen.add(str(chunk[col].dtype))
+                dtype_str = dtypes_seen.pop() if len(dtypes_seen) == 1 else f"MIXED: {dtypes_seen}"
             else:
                 head = pd.read_excel(path, usecols=[col])
-            lines.append(f"| {path.name} | {col} | {head[col].dtype} |")
+                dtype_str = str(head[col].dtype)
+            lines.append(f"| {path.name} | {col} | {dtype_str} |")
         except Exception as e:  # noqa: BLE001
             lines.append(f"| {path.name} | {col} | ERROR: {type(e).__name__}: {e} |")
     lines.append("")
@@ -532,13 +539,16 @@ def main() -> None:
             "Refi rate by FICO bucket (same-window)", "refi_rate_by_fico.png",
         ))
 
+        # pd.cut is right-closed by default: (-100,-2] groups -2.0 itself into the first
+        # bucket, so the label is "<=-2" (not "<-2") to match -- same convention as the LTV
+        # buckets below ("<=60" etc.), found during review.
         rate_delta_data = refi_rate_by_bucket(
             df, "Interest_Delta_Current_Market",
             bins=[-100, -2, -1, 0, 1, 100],
-            bin_labels=["<-2", "-2 to -1", "-1 to 0", "0 to 1", ">1"],
+            bin_labels=["<=-2", "-2 to -1", "-1 to 0", "0 to 1", ">1"],
         )
         figure_paths.append(plot_refi_rate_by_bucket(
-            rate_delta_data, ["<-2", "-2 to -1", "-1 to 0", "0 to 1", ">1"],
+            rate_delta_data, ["<=-2", "-2 to -1", "-1 to 0", "0 to 1", ">1"],
             "Refi rate by note-vs-market rate delta (same-window)", "refi_rate_by_rate_delta.png",
         ))
 
