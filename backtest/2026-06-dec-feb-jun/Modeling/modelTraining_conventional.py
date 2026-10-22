@@ -271,6 +271,15 @@ def evaluate_thresholds(model, X_test, y_test):
 # Evaluate the model at various thresholds
 best_threshold = evaluate_thresholds(best_model, X_test, y_test)
 
+# F12 fix, Step 7 (2026-10-22): see modelTraining.py for the full explanation -- a second,
+# leakage-safe threshold candidate, chosen to hit the 2023 design's target %flagged, computed
+# only from the training holdout's own probability distribution.
+TARGET_PCT_FLAGGED = 0.15
+holdout_probs = pd.Series(best_model.predict_proba(X_test)[:, 1])
+threshold_target_pct_flagged = float(holdout_probs.quantile(1 - TARGET_PCT_FLAGGED))
+print(f"Threshold for target {TARGET_PCT_FLAGGED:.0%} flagged (holdout-derived): "
+      f"{threshold_target_pct_flagged}")
+
 # Cross-validation on the best model
 lightgbm_cv_scores = cross_val_score(
     best_model, X_train_resampled, y_train_resampled, cv=10, scoring='f1'
@@ -281,6 +290,7 @@ print(f"Mean CV score: {lightgbm_cv_scores.mean()}")
 save_data = {
         "model": best_model,
         "best_threshold": best_threshold,
+        "threshold_target_pct_flagged": threshold_target_pct_flagged,  # F12/Step 7
         # F31 backtest fix (2026-10-22): see modelTraining.py for the full explanation --
         # feature_name_ is generic placeholders, not real column names. Save the real order here.
         "feature_columns": list(X.columns),

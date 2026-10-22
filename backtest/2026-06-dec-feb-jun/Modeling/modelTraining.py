@@ -277,6 +277,16 @@ def evaluate_thresholds(model, X_test, y_test):
 # Evaluate the model at various thresholds
 best_threshold = evaluate_thresholds(best_model, X_test, y_test)
 
+# F12 fix, Step 7 (2026-10-22): a second, leakage-safe candidate threshold -- chosen to hit the
+# 2023 design doc's target %flagged (<=40%, ideally 10-20%), computed ONLY from the training
+# holdout's (X_test/y_test) own predicted-probability distribution. June is never looked at to
+# choose this -- it's only used later to REPORT how this pre-decided threshold performs.
+TARGET_PCT_FLAGGED = 0.15  # midpoint of the 2023 design's "ideally 10-20%" target
+holdout_probs = pd.Series(best_model.predict_proba(X_test)[:, 1])
+threshold_target_pct_flagged = float(holdout_probs.quantile(1 - TARGET_PCT_FLAGGED))
+print(f"Threshold for target {TARGET_PCT_FLAGGED:.0%} flagged (holdout-derived): "
+      f"{threshold_target_pct_flagged}")
+
 # Cross-validation on the best model
 lightgbm_cv_scores = cross_val_score(
     best_model, X_train_resampled, y_train_resampled, cv=10, scoring='f1'
@@ -287,6 +297,7 @@ print(f"Mean CV score: {lightgbm_cv_scores.mean()}")
 save_data = {
         "model": best_model,
         "best_threshold": best_threshold,
+        "threshold_target_pct_flagged": threshold_target_pct_flagged,  # F12/Step 7
         # F31 backtest fix (2026-10-22): the model is fit on a bare numpy array (imputer/SMOTE
         # strip pandas column names), so lightgbm_model.feature_name_ is just generic
         # "Column_0".."Column_N" placeholders -- useless for aligning a scoring batch's real

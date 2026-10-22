@@ -1,0 +1,158 @@
+{
+  "fha_same-window": {
+    "before": {
+      "n_loans": 33805,
+      "n_actual_refi": 238,
+      "n_flagged": 14052,
+      "pct_flagged": 0.41567815411921316,
+      "recall": 0.7142857142857143,
+      "precision": 0.012097922003985198,
+      "legacy_specificity": 0.41567815411921316,
+      "true_specificity_TN_over_TN_plus_FP": 0.5864390621741592,
+      "auc": 0.676431471686002,
+      "ks": 0.2901740730254029,
+      "confusion_matrix": {
+        "tp": 170,
+        "fp": 13882,
+        "fn": 68,
+        "tn": 19685
+      }
+    },
+    "after": {
+      "n_loans": 33805,
+      "n_actual_refi": 238,
+      "n_flagged": 9477,
+      "pct_flagged": 0.2803431445052507,
+      "recall": 0.5546218487394958,
+      "precision": 0.013928458372902817,
+      "legacy_specificity": 0.2803431445052507,
+      "true_specificity_TN_over_TN_plus_FP": 0.7216015729734561,
+      "auc": 0.6668948569686164,
+      "ks": 0.27777080981646385,
+      "confusion_matrix": {
+        "tp": 132,
+        "fp": 9345,
+        "fn": 106,
+        "tn": 24222
+      },
+      "threshold_used": 0.2
+    }
+  },
+  "fha_production-window": {
+    "before": {
+      "n_loans": 33805,
+      "n_actual_refi": 238,
+      "n_flagged": 13768,
+      "pct_flagged": 0.4072770300251442,
+      "recall": 0.7058823529411765,
+      "precision": 0.01220220801859384,
+      "legacy_specificity": 0.4072770300251442,
+      "true_specificity_TN_over_TN_plus_FP": 0.5948401704054578,
+      "auc": 0.7343930601108082,
+      "ks": 0.3495665135300702,
+      "confusion_matrix": {
+        "tp": 168,
+        "fp": 13600,
+        "fn": 70,
+        "tn": 19967
+      }
+    },
+    "after": {
+      "n_loans": 33805,
+      "n_actual_refi": 238,
+      "n_flagged": 9157,
+      "pct_flagged": 0.2708770891879899,
+      "recall": 0.6218487394957983,
+      "precision": 0.0161624986349241,
+      "legacy_specificity": 0.2708770891879899,
+      "true_specificity_TN_over_TN_plus_FP": 0.7316114040575565,
+      "auc": 0.7304546807551334,
+      "ks": 0.3637257029901066,
+      "confusion_matrix": {
+        "tp": 148,
+        "fp": 9009,
+        "fn": 90,
+        "tn": 24558
+      },
+      "threshold_used": 0.1
+    }
+  },
+  "conventional_same-window": {
+    "before": {
+      "n_loans": 71378,
+      "n_actual_refi": 223,
+      "n_flagged": 22367,
+      "pct_flagged": 0.31335985878001626,
+      "recall": 0.6457399103139013,
+      "precision": 0.0064380560647382306,
+      "legacy_specificity": 0.31335985878001626,
+      "true_specificity_TN_over_TN_plus_FP": 0.6876818213758695,
+      "auc": 0.6493363663548881,
+      "ks": 0.22949646023192594,
+      "confusion_matrix": {
+        "tp": 144,
+        "fp": 22223,
+        "fn": 79,
+        "tn": 48932
+      }
+    },
+    "after": {
+      "n_loans": 71378,
+      "n_actual_refi": 223,
+      "n_flagged": 18086,
+      "pct_flagged": 0.2533833954439743,
+      "recall": 0.5381165919282511,
+      "precision": 0.006634966272254783,
+      "legacy_specificity": 0.2533833954439743,
+      "true_specificity_TN_over_TN_plus_FP": 0.7475089593141733,
+      "auc": 0.6567039114066966,
+      "ks": 0.23941612969601828,
+      "confusion_matrix": {
+        "tp": 120,
+        "fp": 17966,
+        "fn": 103,
+        "tn": 53189
+      },
+      "threshold_used": 0.2
+    }
+  },
+  "conventional_production-window": {
+    "before": {
+      "n_loans": 71378,
+      "n_actual_refi": 223,
+      "n_flagged": 21831,
+      "pct_flagged": 0.3058505421838662,
+      "recall": 0.6412556053811659,
+      "precision": 0.0065503183546333195,
+      "legacy_specificity": 0.3058505421838662,
+      "true_specificity_TN_over_TN_plus_FP": 0.6952006183683508,
+      "auc": 0.6293788618480529,
+      "ks": 0.1963143683356583,
+      "confusion_matrix": {
+        "tp": 143,
+        "fp": 21688,
+        "fn": 80,
+        "tn": 49467
+      }
+    },
+    "after": {
+      "n_loans": 71378,
+      "n_actual_refi": 223,
+      "n_flagged": 19450,
+      "pct_flagged": 0.27249292499089356,
+      "recall": 0.5829596412556054,
+      "precision": 0.006683804627249357,
+      "legacy_specificity": 0.27249292499089356,
+      "true_specificity_TN_over_TN_plus_FP": 0.7284800787014265,
+      "auc": 0.6495885789659599,
+      "ks": 0.2349640288223177,
+      "confusion_matrix": {
+        "tp": 130,
+        "fp": 19320,
+        "fn": 93,
+        "tn": 51835
+      },
+      "threshold_used": 0.1
+    }
+  }
+}
