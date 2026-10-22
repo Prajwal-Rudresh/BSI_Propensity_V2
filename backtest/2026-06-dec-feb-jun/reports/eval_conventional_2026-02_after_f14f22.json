@@ -1,0 +1,18 @@
+{
+  "n_loans": 71378,
+  "n_actual_refi": 223,
+  "n_flagged": 22509,
+  "pct_flagged": 0.31534926728123513,
+  "recall": 0.6457399103139013,
+  "precision": 0.006397441023590564,
+  "legacy_specificity": 0.31534926728123513,
+  "true_specificity_TN_over_TN_plus_FP": 0.6856861780619774,
+  "auc": 0.6097055219247566,
+  "ks": 0.19542973354764892,
+  "confusion_matrix": {
+    "tp": 144,
+    "fp": 22365,
+    "fn": 79,
+    "tn": 48790
+  }
+}

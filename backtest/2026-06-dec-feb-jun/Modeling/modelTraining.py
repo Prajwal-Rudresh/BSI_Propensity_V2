@@ -166,7 +166,12 @@ def objective(trial):
 
 
 # Create an Optuna study
-study = optuna.create_study(direction="maximize")
+# F27 fix (2026-10-22, this backtest only): Optuna was unseeded, so two retrains on identical
+# data could land on different hyperparameters -- pure noise that was confounding our ability to
+# tell whether a feature fix actually helped. Seeded (42, matching this file's existing
+# random_state=0 split / SMOTE 42 convention) so retraining is now reproducible for comparison
+# purposes. Does not change production; this file stays a backtest-only copy.
+study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
 study.optimize(objective, n_trials=100)
 
 # Retrieve the best parameters and model

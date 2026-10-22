@@ -320,7 +320,7 @@ filter as defense in depth (would need the same `Reason_Closed_Redifn` meaning c
 | [F16](#f16) | Medium | Training set is 1 row/loan over 11 months, not a 12-month panel | document-only |
 | [F23](#f23) | Medium | Label window is 3 or 4 calendar months, depending on month-start rounding | document-only |
 | [F26](#f26) | High | Backtests leak by design — production trains through the month before the test | document-only |
-| [F27](#f27) | Medium | Optuna is unseeded — retraining doesn't reproduce a delivered model | document-only |
+| [F27](#f27) | Medium | Optuna is unseeded — fixed for this backtest (seed=42), confirmed reproducible | no-score-change (backtest-only) |
 | [F28](#f28) | Medium | Tool halts if `PayoffReason{test+1}.xlsx` is missing, even on a live run — **TO CONFIRM** | document-only |
 | [F29](#f29) | High | Production-window baseline: 6.8% of loans have a label-visibility gap vs. `payoff_data`'s start date | document-only |
 | [F30](#f30) | Medium | Credit-bureau feature reuses one June 2026 snapshot for all training rows — point-in-time leak | document-only |
@@ -456,6 +456,21 @@ labels aren't fully resolved yet. document-only here — raise with Anwar; chang
 windowing convention is out of scope for this repo.
 
 ### F27
+**Fixed for this backtest 2026-10-22, after it caused a real methodological problem, not just a
+theoretical gap.** Two fixes in (F5, then F14/F22), before/after deltas kept flip-flopping in
+inconsistent directions across universes/windows — e.g. F5 showed FHA same-window improving while
+Conventional same-window got worse, then F14/F22 showed the opposite pattern. Added
+`sampler=optuna.samplers.TPESampler(seed=42)` to `optuna.create_study(...)` in both
+`Modeling/modelTraining.py` and `modelTraining_conventional.py` (matching the file's existing
+`random_state=0`/SMOTE `42` convention). **Verified reproducible**: retrained the identical
+same-window FHA model twice, byte-for-byte identical cross-validation scores both times.
+Re-evaluated the cumulative fix state (F19+F7+F5+F14/F22) against this now-reproducible seed and
+got a far more coherent picture than the unseeded retrains had shown — 3 of 4 universe/window
+combinations improved on AUC/KS, only one small (and now trustworthy, not noise-confounded)
+regression. Strong evidence the unseeded noise really was swamping genuine small-fix signal.
+Backtest-only — does not change production; a real production fix would need the same
+needs-signoff process as any other training-behavior change.
+
 **Optuna is unseeded, so retraining the model doesn't reproduce a previously delivered `.pkl`.**
 Only the train/test split (`random_state=0`) and SMOTE (`42`) are seeded
 (`Modeling/modelTraining.py`, `modelTraining_conventional.py`) — the hyperparameter search itself

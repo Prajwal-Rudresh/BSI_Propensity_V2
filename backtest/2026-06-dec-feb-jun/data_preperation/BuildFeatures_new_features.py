@@ -250,15 +250,19 @@ def merge_and_process_data(mck_oneoff_data, payoff_reason_data):
     merged_data["Date_Paid_Off"] = pd.to_datetime(merged_data["Date_Paid_Off"], errors="coerce")
     merged_data["Date_Paid_Off"] = merged_data["Date_Paid_Off"].dt.strftime("%Y-%m")
 
-    # Create 'Event_Date': fill missing 'Date_Paid_Off' with default and format
-    merged_data["Event_Date"] = merged_data["Date_Paid_Off"].fillna("2023-08")
-    merged_data["Event_Date"] = pd.to_datetime(merged_data["Event_Date"], format="%Y-%m")
-    merged_data["Event_Date"] = merged_data["Event_Date"].dt.strftime("%Y-%m")
-
-    # Calculate 'Interest_Rate_Date' (two months prior to 'Event_Date')
-    merged_data["Interest_Rate_Date"] = pd.to_datetime(merged_data["Event_Date"], format="%Y-%m") - pd.DateOffset(
-        months=2)
-    merged_data["Interest_Rate_Date"] = merged_data["Interest_Rate_Date"].dt.strftime("%Y-%m")
+    # F14/F22 fix (2026-10-22, needs-signoff, Option A): the old code defaulted every
+    # non-matched (non-refi) loan's Event_Date to the hardcoded literal "2023-08", so
+    # ~97%+ of training rows looked up the June 2023 market rate regardless of real
+    # observation month. For a matched (real refi) loan: Interest_Rate_Date = its real
+    # payoff date minus 2 months (unchanged -- this part was never broken). For a
+    # non-matched loan: Interest_Rate_Date = that loan's own Year_Month_Obs directly, no
+    # offset -- matches the scoring side's own fallback exactly (PredictionDataPreperation.py
+    # never calls this function; bucket_and_transform_data()'s fallback already does this),
+    # so the same loan gets the same rate-lookup convention in training and at scoring time.
+    matched_date = pd.to_datetime(merged_data["Date_Paid_Off"], format="%Y-%m", errors="coerce")
+    event_based_rate_date = (matched_date - pd.DateOffset(months=2)).dt.strftime("%Y-%m")
+    own_month_rate_date = pd.to_datetime(merged_data["Year_Month_Obs"], format="%Y-%m").dt.strftime("%Y-%m")
+    merged_data["Interest_Rate_Date"] = event_based_rate_date.fillna(own_month_rate_date)
 
     # Create the new column
     merged_data['Year_Month_Obs'] = pd.to_datetime(merged_data['Year_Month_Obs'])

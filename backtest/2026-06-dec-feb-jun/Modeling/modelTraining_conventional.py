@@ -168,7 +168,9 @@ def objective(trial):
 
 
 # Create an Optuna study
-study = optuna.create_study(direction="maximize")
+# F27 fix (2026-10-22, this backtest only): see modelTraining.py for the full explanation --
+# seeded so retraining is reproducible for comparison purposes.
+study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
 study.optimize(objective, n_trials=100)
 
 # Retrieve the best parameters and model
