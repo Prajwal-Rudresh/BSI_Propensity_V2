@@ -272,6 +272,7 @@ filter as defense in depth (would need the same `Reason_Closed_Redifn` meaning c
 | [F27](#f27) | Medium | Optuna is unseeded — retraining doesn't reproduce a delivered model | document-only |
 | [F28](#f28) | Medium | Tool halts if `PayoffReason{test+1}.xlsx` is missing, even on a live run — **TO CONFIRM** | document-only |
 | [F29](#f29) | High | Production-window baseline: 6.8% of loans have a label-visibility gap vs. `payoff_data`'s start date | document-only |
+| [F30](#f30) | Medium | Credit-bureau feature reuses one June 2026 snapshot for all training rows — point-in-time leak | document-only |
 | [F17](#f17) | Medium | Positives/negatives observed at systematically different months | document-only |
 | [F20](#f20) | Medium | Possible right-censoring at `end_date` — **needs production timing confirmation** | document-only |
 
@@ -381,6 +382,21 @@ actually runs — not determined by code reading alone. Do not treat as a confir
 confirmed with Anwar/data engineering.
 
 ### F26
+**Confirmed and quantified 2026-10-22, not just theoretical: 89.9% of the production-window
+baseline's training rows have this exact problem.** The production window's last training month
+(May 2026) plus the 90-day/3-month label lookahead reaches into August 2026 — *after* the June
+2026 test cutoff. Checked directly: of 123,047 loans in the production-window training set,
+**110,625 (89.9%) have their snapshot in April or May 2026**, meaning their `Refinanced_3_months_
+lookahead` label was built using payoff visibility past the test month. The same-window baseline
+(Dec'25-Feb'26) does **not** have this problem — its last month (Feb'26) + 3 months = May'26, which
+is before the June test, satisfying `backtest-plan.md`'s own leakage rule. This asymmetry is
+expected and is part of why the two-baseline design exists: it isolates this effect (present in
+production's real convention, reproduced faithfully here) from the model/fix effects being
+measured. Treat the production-window baseline's numbers as somewhat optimistic relative to true
+real-time deployment, where those same April/May rows' labels would often default to "no refi"
+for lack of data yet (see F20) — not a backtest bug, a faithful reproduction of how production
+itself already works every month.
+
 **Backtests leak by design: production always trains through the month immediately before the
 test month.** From [backtest-plan.md](../../backtest/2026-06-dec-feb-jun/backtest-plan.md): the known Jul 2025 FHA
 backtest (recall 0.716, see `project-background.md`) used this same production window convention,
@@ -421,6 +437,18 @@ the same-window baseline (Dec'25-Feb'26, entirely within `payoff_data`'s coverag
 understating the production baseline's true recall/base-rate specifically, which matters when
 comparing it against the same-window baseline and the eventual improved model. Does not change any
 code; it's a backtest data-coverage limitation to caveat in the Step 8 sign-off report, not a fix.
+
+### F30
+**Credit-bureau feature leakage, by necessity: this backtest reuses one June 2026 credit snapshot
+as the `CREDIT_BUREAU_PAYMENT_HISTORY` feature for every training row, including Dec 2025 ones.**
+Since only one credit-bureau pull was requested/received (see `data/real/MANIFEST.md`), a Dec 2025
+training row's credit feature can reflect information from up to 6 months after that row's own
+snapshot month — technically a point-in-time violation for a feature, not just a label. Believed
+low-impact (credit payment-rating codes for most borrowers likely don't shift dramatically month to
+month, see `reports/figures/credit_bureau_payment_history_value_counts.png` — the large majority
+are "0"/current in both windows), but not zero-impact, and not independently verifiable without a
+per-month credit pull. Document as a backtest limitation in the Step 8 sign-off report; not a code
+defect, and not fixable without additional data neither requested nor in scope to request now.
 
 ## Hypotheses tested for F1 (pred_prob / y_pred mismatch)
 

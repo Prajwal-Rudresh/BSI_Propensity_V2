@@ -92,7 +92,10 @@ tool, then evaluate them against the June–August refis separately.
 
 ## New findings
 
-See [known-findings.md](../../docs/context/known-findings.md) F21–F28 (added from this handoff).
+See [known-findings.md](../../docs/context/known-findings.md) F21–F30: F21-F28 from this handoff,
+F29 (production-window label-visibility gap, confirmed during EDA) and F30 (credit-bureau feature
+leakage, confirmed while re-checking for data leakage before training) found while executing this
+plan.
 
 ## Next tasks
 
