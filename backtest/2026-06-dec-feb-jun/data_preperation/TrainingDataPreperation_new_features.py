@@ -7,7 +7,8 @@ import json
 from BuildFeatures_new_features import process_mck_oneoff_data, process_all_files, filter_and_clean_final_data, \
                           merge_and_process_data, bucket_and_transform_data, process_credit_report, \
                           transform_credit_report_to_time_series, rename_and_transform_logins_columns, \
-                          count_monthly_logins, add_fips_to_training_oneoff, clean_domographic
+                          count_monthly_logins, add_fips_to_training_oneoff, clean_domographic, \
+                          load_preaggregated_credit_report
 
 # Define root directory
 files_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +18,12 @@ root_directory = os.path.join(files_path, "data_preperation", "Input")
 mck_file_path = os.path.join(root_directory, 'one_off_oct23_to_Feb25.csv')
 payoff_reason_data_path = os.path.join(root_directory, 'Payoffs Reasons')
 interest_rate_matrix_path = os.path.join(root_directory, 'Curinos_Interest_Rate_File_2022-2024.csv')
-credit_report_file_path = os.path.join(root_directory, 'BSI_CREDITREPORTING.xlsx')
+# Backtest adapter: real file is a single pre-aggregated column, not the wide BSI_CREDITREPORTING.xlsx
+# layout -- see load_preaggregated_credit_report() docstring and data/real/MANIFEST.md.
+credit_report_file_path = os.path.join(
+    files_path, "data", "real", "credit_bureau", "Credit Bureau Data.csv"
+)
+CREDIT_SNAPSHOT_COLUMN = "CREDIT_BUREAU_PAYMENT_HISTORY_2026_JUNE"
 logins_file_path = os.path.join(root_directory, 'MLW_logins.csv')
 zips_file_path = os.path.join(root_directory, 'Zip_FIPS_Mapping.csv')
 demographics_file_path = os.path.join(root_directory, 'Census_Demographic.csv')
@@ -132,7 +138,7 @@ merged_data['Orginal_Interest_Rate'] = np.where(
 print("Interim loan numbers check: "+str(merged_data.shape[0]))
 
 
-credit_report = process_credit_report(credit_report_file_path, transform_credit_report_to_time_series)
+credit_report = load_preaggregated_credit_report(credit_report_file_path, CREDIT_SNAPSHOT_COLUMN)
 
 
 Logins = rename_and_transform_logins_columns(logins_df)

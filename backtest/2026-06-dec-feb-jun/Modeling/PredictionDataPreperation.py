@@ -11,7 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data_preperation.BuildFeatures_new_features import process_mck_oneoff_data, process_all_files, filter_and_clean_final_data, \
                           merge_and_process_data, bucket_and_transform_data, process_credit_report, \
                           transform_credit_report_to_time_series, rename_and_transform_logins_columns, \
-                          count_monthly_logins, add_fips_to_training_oneoff, clean_domographic
+                          count_monthly_logins, add_fips_to_training_oneoff, clean_domographic, \
+                          load_preaggregated_credit_report
 
 # Retrieve parameters from command-line arguments
 #params = json.loads(sys.argv[1])
@@ -115,10 +116,11 @@ merged_data['Orginal_Interest_Rate'] = np.where(
 # Final dataset
 # final_interest_rate = merged_data[['LoanNumber', 'LoanType', "Year", "Month", "Term", "FICO", "LTV", "Orginal_Interest_Rate"]]
 
-# Example usage
-# Assuming transform_credit_report_to_time_series is defined elsewhere
-credit_report_file_path = root_directory+'/BSI_CREDITREPORTING.xlsx'
-credit_report = process_credit_report(credit_report_file_path, transform_credit_report_to_time_series)
+# Backtest adapter: real file is a single pre-aggregated column, not the wide BSI_CREDITREPORTING.xlsx
+# layout -- see load_preaggregated_credit_report() docstring and data/real/MANIFEST.md.
+credit_report_file_path = os.path.join(files_path, "data", "real", "credit_bureau", "Credit Bureau Data.csv")
+CREDIT_SNAPSHOT_COLUMN = "CREDIT_BUREAU_PAYMENT_HISTORY_2026_JUNE"
+credit_report = load_preaggregated_credit_report(credit_report_file_path, CREDIT_SNAPSHOT_COLUMN)
 
 logins_df = pd.read_csv(root_directory+'/MLW_logins.csv')
 Logins = rename_and_transform_logins_columns(logins_df)

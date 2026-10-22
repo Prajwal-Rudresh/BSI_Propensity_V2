@@ -31,7 +31,7 @@ properties of how the model/label/process currently work, not bugs to fix).
 | [F15](#f15) | Medium | SMOTE crashes if the refi share exceeds `sampling_strategy` | document-only (missing guardrail) |
 | [F18](#f18) | High | Label counts sales/REO/short-sales as refis — regression from older code | needs-signoff |
 | [F19](#f19) | High | Loan-number typing is inconsistent across inputs (int64 vs. uncast) — join/collision risk | needs-signoff if join broken |
-| [F21](#f21) | Medium | Cached training/prediction files have no universe in the name — 2nd universe may reuse 1st's data | no-score-change |
+| [F21](#f21) | ~~Medium~~ | ~~Cached training/prediction files have no universe in the name~~ — **retracted, see detail: not a defect** | n/a |
 | [F22](#f22) | High | `"2023-08"` event-date hardcode — ties into F14 | needs-signoff |
 | [F24](#f24) | High | Credit-bureau history months list is hardcoded/scrambled 2021–2023 | needs-signoff |
 | [F25](#f25) | High | Close-reason filter dropped in wired path — ties into F18 | needs-signoff |
@@ -182,15 +182,20 @@ own code standard already requires loan numbers to be strings everywhere, which 
 doesn't currently follow in any of its five input sources.
 
 ### F21
-**Cached training/prediction files have no universe in the name, so the second universe run may
-reuse the first universe's data.** `training_data_{end}.csv`, `prediction_data_{end}.csv`, and
-`best_model_{end}_{universe}.pkl` are keyed by end date in `run.py:89-110`; the first two omit the
-universe entirely, so running Conventional then FHA (or vice versa) for the same end date risks the
-second run silently scoring on the first universe's cached data. From
-[backtest-plan.md](../../backtest/2026-06-dec-feb-jun/backtest-plan.md), raised 2026-10-21. Fixing
-the cache key (adding universe to the filename) doesn't change any delivered score —
-no-score-change. Not yet confirmed against real data; until fixed, move/rename cached files between
-runs (see `backtest/2026-06-dec-feb-jun/data/real/MANIFEST.md`).
+**Status: REVISED 2026-10-22, not a defect.** Originally raised (2026-10-21, from
+[backtest-plan.md](../../backtest/2026-06-dec-feb-jun/backtest-plan.md)) as: cached
+`training_data_{end}.csv`/`prediction_data_{end}.csv` have no universe in the name, so the second
+universe run might silently reuse the first universe's data. **Checked directly against the code
+while running the real Dec'25-Feb'26 backtest (`TrainingDataPreperation_new_features.py`,
+`modelTraining.py:59`, `ModelInference.py`'s own bucket filter):** these two cached files are
+genuinely universe-agnostic by design — `TrainingDataPreperation_new_features.py` never filters by
+universe at all, and universe/bucket filtering (`data[data.LoanType.isin(bucket)]`) happens
+correctly downstream in `modelTraining.py`/`modelTraining_conventional.py` and `ModelInference.py`
+regardless of which universe's run first created the cache. `bucket_and_transform_data()`'s own
+internal `bucket` (FICO/LTV score bucketing, `BuildFeatures_new_features.py:270+`) is an unrelated
+naming coincidence, not a hidden universe dependency. Reusing the cache across universes for the
+same end date is correct behavior, not a bug — only `best_model_{end}_{universe}.pkl` needs
+universe in its name, and it already has it. No fix needed.
 
 ### F22
 **The `"2023-08"` hardcoded event-date default is the same mechanism as F14**, restated from the
@@ -408,6 +413,12 @@ here since the override mechanism doesn't rule out these contributing additional
 - **Who set the F12 threshold/override constants (0.025, -1, 25, 500) and why**, and are they the
   same ones that produced the Aug 2026 golden-master files we need to reproduce?
 - Is missing `Login_Count` (F6) a true zero or a broken join?
+- **F8's undocumented `Census_Demographic.csv` vintage is now live, not just theoretical:** the
+  Dec'25-Feb'26/Jun'26 backtest (`backtest/2026-06-dec-feb-jun/`) is using a copy of
+  `Zip_FIPS_Mapping.csv`/`Census_Demographic.csv`/`HPI.xlsx` carried over from the original Flowise
+  export (via `BSI_PROPENSITY_APP/`), used provisionally pending Anwar/data engineering confirming
+  whether it's current enough for this window — ask before treating that backtest's Census-derived
+  features as final.
 - Origin and validation history of PropertyState, FICO_Difference, EscrowPayment_Flag,
   `Flag_Trailing_DaysDiff_GT45` — code location is known (F5, F9), but *when/why* they were added
   to the validated feature set is still undocumented.

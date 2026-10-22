@@ -421,6 +421,25 @@ def transform_credit_report_to_time_series(BSI_CreditReporting, Year_Month_Obs=N
     return BSI_CreditReporting
 
 
+def load_preaggregated_credit_report(file_path, snapshot_column):
+    """Backtest adapter (2026-06-dec-feb-jun) -- NOT part of the original legacy code.
+
+    The real credit-bureau extract for this backtest is a single pre-aggregated column
+    per loan (e.g. CREDIT_BUREAU_PAYMENT_HISTORY_2026_JUNE), not the 36-raw-monthly-column
+    layout process_credit_report()/transform_credit_report_to_time_series() expect -- that
+    code path cannot run against this file's shape at all (see data/real/MANIFEST.md
+    "Resolved decisions", and known-findings.md F13/F24, reclassified not-applicable for
+    this dataset). This reads the real file directly and returns it in the same
+    ['LoanNumber', 'CBH'] shape the rest of the pipeline already expects from
+    process_credit_report(), so no downstream code changes beyond this one call site.
+    """
+    df = pd.read_csv(file_path) if str(file_path).lower().endswith(".csv") else pd.read_excel(file_path)
+    out = df[["ACCT_NBR", snapshot_column]].rename(
+        columns={"ACCT_NBR": "LoanNumber", snapshot_column: "CBH"}
+    )
+    return out
+
+
 def process_credit_report(file_path, transform_func):
     """
     Process the BSI Credit Reporting data into a summarized format.
