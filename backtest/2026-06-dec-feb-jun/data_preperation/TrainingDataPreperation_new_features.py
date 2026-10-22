@@ -8,7 +8,7 @@ from BuildFeatures_new_features import process_mck_oneoff_data, process_all_file
                           merge_and_process_data, bucket_and_transform_data, process_credit_report, \
                           transform_credit_report_to_time_series, rename_and_transform_logins_columns, \
                           count_monthly_logins, add_fips_to_training_oneoff, clean_domographic, \
-                          load_preaggregated_credit_report
+                          load_preaggregated_credit_report, clamp_year_month_to_available
 
 # Define root directory
 files_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -95,8 +95,13 @@ interest_rate_matrix['LoanType'] = interest_rate_matrix['LoanType'].str.upper()
 interest_rate_matrix = interest_rate_matrix[['LoanType', 'Year', 'Month', 'Term', 'FICO', 'LTV', 'Avg_Rate']]
 
 init_ln = mck_oneoff_final_df.shape[0]
+# F32 backtest adapter: carry forward the rate matrix's most recent available month for any
+# loan whose own (Year, Month) is beyond the matrix's coverage (see clamp_year_month_to_available
+# docstring). No-op for training rows already within the matrix's covered range.
+mck_oneoff_for_rate_join = clamp_year_month_to_available(mck_oneoff_final_df, interest_rate_matrix)
+
 # Merge datasets on keys
-merged_data = mck_oneoff_final_df.merge(
+merged_data = mck_oneoff_for_rate_join.merge(
     interest_rate_matrix,
     how='left',
     on=['LoanType', 'Year', 'Month', 'Term', 'FICO', 'LTV']

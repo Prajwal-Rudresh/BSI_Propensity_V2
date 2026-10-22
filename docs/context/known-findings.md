@@ -470,6 +470,19 @@ but flagged `needs-signoff`-adjacent severity since without it the legacy code c
 whenever scoring-batch category sparsity differs from training -- worth porting to the main
 engineering-quality `pg_score/` rebuild, not just this backtest copy.
 
+**Self-correction, same day:** the first fix (reindex to `lightgbm_model.feature_name_`) was
+itself wrong and silently far worse than the crash it fixed. `modelTraining.py`/
+`modelTraining_conventional.py` fit the model on a bare numpy array (`SimpleImputer`/`SMOTE` both
+strip pandas column names before `.fit()`), so `feature_name_` is generic `"Column_0".."Column_N"`
+placeholders, not real column names. Reindexing scoring data against those placeholders matched
+nothing and silently zeroed out *every* real feature — confirmed by an actual run: `pred_prob` came
+back a single constant value (std ≈ 0) for all 33,805 FHA loans and all 71,378 Conventional loans,
+which is what was producing the earlier "100% flagged" / "near-zero recall" degenerate results, not
+F32 alone. **Proper fix:** `X.columns` (the real column order) is now saved into the model `.pkl`
+as `feature_columns` at training time; `ModelInference.py` reindexes against that saved list
+instead of `feature_name_`. Caught by checking `pred_prob`'s own variance after the first fix,
+rather than trusting a plausible-looking metric number.
+
 ### F32
 **Critical, blocking: the real interest-rate matrix has a ~2-month vendor lag, so
 `Interest_Delta_Current_Market` is 100% null for every loan at June 2026 scoring time —

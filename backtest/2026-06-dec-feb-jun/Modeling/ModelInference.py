@@ -63,6 +63,10 @@ print(best_model_path)
 saved_data = joblib.load(best_model_path)
 lightgbm_model = saved_data["model"]
 best_threshold = saved_data["best_threshold"]
+# F31 fix, corrected: lightgbm_model.feature_name_ is generic "Column_N" placeholders (the model
+# was fit on a bare numpy array), not real column names -- reindexing against it silently zeroes
+# every real feature. Use the real training column order saved alongside the model instead.
+training_feature_columns = saved_data["feature_columns"]
 print("Model loaded successfully!")
 
 test_pred_data = pd.read_csv(os.path.join(files_path, "modeling_data", f"prediction_data_{end_date}.csv"))
@@ -95,10 +99,12 @@ data = pd.get_dummies(data, columns=categorical_columns, drop_first=True)
 # Backtest adapter (F31, real-data run): pd.get_dummies() is fit independently on this scoring
 # batch, so a category present in training but absent from this specific June batch (e.g. a rare
 # credit-rating code) silently produces fewer columns than the model expects, crashing predict().
-# Reindex to the model's own trained feature schema -- a missing one-hot category is correctly 0
-# for every row in this batch, not a behavior change, just aligning the matrix shape to what the
-# model was actually fit on.
-data = data.reindex(columns=lightgbm_model.feature_name_, fill_value=0)
+# Reindex to the REAL training column order saved alongside the model (NOT
+# lightgbm_model.feature_name_, which is generic "Column_N" placeholders -- confirmed by an actual
+# run: using it silently zeroed every real feature and collapsed pred_prob to one constant value
+# for every loan). A missing one-hot category is correctly 0 for every row in this batch; this is
+# plumbing to match the matrix shape, not a behavior change.
+data = data.reindex(columns=training_feature_columns, fill_value=0)
 
 predictions = lightgbm_model.predict_proba(data)[:, 1]
 test_pred_data = test_pred_data[test_pred_data.LoanType.isin(bucket)]

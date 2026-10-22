@@ -263,6 +263,12 @@ print(f"Mean CV score: {lightgbm_cv_scores.mean()}")
 save_data = {
         "model": best_model,
         "best_threshold": best_threshold,
+        # F31 backtest fix (2026-10-22): the model is fit on a bare numpy array (imputer/SMOTE
+        # strip pandas column names), so lightgbm_model.feature_name_ is just generic
+        # "Column_0".."Column_N" placeholders -- useless for aligning a scoring batch's real
+        # dummy-encoded columns. Save X's real column order here; ModelInference.py reindexes
+        # the scoring matrix to THIS list, not to feature_name_.
+        "feature_columns": list(X.columns),
     }
 
 # # Save the trained model to disk

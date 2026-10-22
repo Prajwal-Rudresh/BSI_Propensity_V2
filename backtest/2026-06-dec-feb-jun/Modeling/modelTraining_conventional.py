@@ -265,6 +265,9 @@ print(f"Mean CV score: {lightgbm_cv_scores.mean()}")
 save_data = {
         "model": best_model,
         "best_threshold": best_threshold,
+        # F31 backtest fix (2026-10-22): see modelTraining.py for the full explanation --
+        # feature_name_ is generic placeholders, not real column names. Save the real order here.
+        "feature_columns": list(X.columns),
     }
 
 # # Save the trained model to disk

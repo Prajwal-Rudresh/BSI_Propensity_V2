@@ -267,6 +267,31 @@ def merge_and_process_data(mck_oneoff_data, payoff_reason_data):
 
     return processed_data
 
+def clamp_year_month_to_available(loan_df, rate_matrix, year_col="Year", month_col="Month"):
+    """Backtest adapter (F32, 2026-10-22) -- NOT part of the original legacy code.
+
+    The real interest-rate matrix has a ~2-month vendor feed lag (confirmed: covers through
+    April 2026, nothing for May/June 2026). Scoring a later month than the matrix covers means
+    the join (and its group-means fallback, keyed the same way) finds nothing, so
+    Interest_Delta_Current_Market comes back null for every loan -- confirmed by an actual
+    production-style run, not just theory. Per Prajwal's decision: for any loan whose own
+    (Year, Month) is later than the latest month actually present in the rate matrix, carry
+    forward the matrix's most recent available month as a proxy. A loan within the matrix's
+    covered range is untouched. Returns a copy with Year/Month replaced only where needed --
+    callers should merge on the returned columns, not the loan's original Year/Month.
+    """
+    loan_df = loan_df.copy()
+    max_year, max_month = rate_matrix[[year_col, month_col]].drop_duplicates().sort_values(
+        [year_col, month_col]
+    ).iloc[-1]
+    too_new = (loan_df[year_col] > max_year) | (
+        (loan_df[year_col] == max_year) & (loan_df[month_col] > max_month)
+    )
+    loan_df.loc[too_new, year_col] = max_year
+    loan_df.loc[too_new, month_col] = max_month
+    return loan_df
+
+
 def bucket_and_transform_data(data):
     """
     Apply bucketing for FICO scores, Current LTV, and compute additional fields like Year, Month, and Term.
