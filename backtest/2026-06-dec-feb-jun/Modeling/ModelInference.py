@@ -92,6 +92,13 @@ categorical_columns = data.select_dtypes(include=['object']).columns
 print("Categorical Columns:", categorical_columns)
 data = pd.get_dummies(data, columns=categorical_columns, drop_first=True)
 
+# Backtest adapter (F31, real-data run): pd.get_dummies() is fit independently on this scoring
+# batch, so a category present in training but absent from this specific June batch (e.g. a rare
+# credit-rating code) silently produces fewer columns than the model expects, crashing predict().
+# Reindex to the model's own trained feature schema -- a missing one-hot category is correctly 0
+# for every row in this batch, not a behavior change, just aligning the matrix shape to what the
+# model was actually fit on.
+data = data.reindex(columns=lightgbm_model.feature_name_, fill_value=0)
 
 predictions = lightgbm_model.predict_proba(data)[:, 1]
 test_pred_data = test_pred_data[test_pred_data.LoanType.isin(bucket)]

@@ -35,6 +35,8 @@ properties of how the model/label/process currently work, not bugs to fix).
 | [F22](#f22) | High | `"2023-08"` event-date hardcode — ties into F14 | needs-signoff |
 | [F24](#f24) | High | Credit-bureau history months list is hardcoded/scrambled 2021–2023 | needs-signoff |
 | [F25](#f25) | High | Close-reason filter dropped in wired path — ties into F18 | needs-signoff |
+| [F31](#f31) | Critical | `pd.get_dummies()` train/score column mismatch crashes inference on real data — fixed in backtest copy | no-score-change |
+| [F32](#f32) | Critical | Interest-rate matrix lags ~2 months — `Interest_Delta_Current_Market` is 100% null at June 2026 scoring | needs-decision |
 
 ### F1
 `pred_prob` and `y_pred` disagree for ~1/3–37% of loans (Conv Aug26, FHA Aug26, FHA Jul25 all show
@@ -449,6 +451,49 @@ month, see `reports/figures/credit_bureau_payment_history_value_counts.png` — 
 are "0"/current in both windows), but not zero-impact, and not independently verifiable without a
 per-month credit pull. Document as a backtest limitation in the Step 8 sign-off report; not a code
 defect, and not fixable without additional data neither requested nor in scope to request now.
+
+### F31
+**New, discovered 2026-10-22 by actually running inference on real data (not found by code
+reading alone): `pd.get_dummies()` doesn't guarantee the scoring batch's one-hot columns match
+the training schema, and this isn't hypothetical — it crashed on the first real inference run.**
+`ModelInference.py:91-93` one-hot encodes `categorical_columns` independently on whatever's
+present in that scoring batch. Confirmed root cause: the FHA same-window training set contains
+credit-rating codes `4` and `5` (see F30's categorical chart); the June 2026 FHA scoring batch has
+neither, so `pd.get_dummies()` produced 71 columns instead of the 73 the model was trained on --
+`LightGBMError: The number of features in data (71) is not the same as it was in training data
+(73)`. **Fix applied** (backtest copy only, `ModelInference.py`): reindex the scoring matrix to
+`lightgbm_model.feature_name_` (the model's own trained schema) with `fill_value=0` before
+`predict_proba()`. This is not a scoring-behavior change -- a one-hot category absent from a batch
+is correctly 0 for every row in it either way -- it's a plumbing fix for a crash, in the same
+category as the missing `BestModel/` directory and the credit-bureau adapter. `no-score-change`,
+but flagged `needs-signoff`-adjacent severity since without it the legacy code cannot score at all
+whenever scoring-batch category sparsity differs from training -- worth porting to the main
+engineering-quality `pg_score/` rebuild, not just this backtest copy.
+
+### F32
+**Critical, blocking: the real interest-rate matrix has a ~2-month vendor lag, so
+`Interest_Delta_Current_Market` is 100% null for every loan at June 2026 scoring time —
+across both universes, confirmed by actually running scoring, not found by code reading.**
+`data/real/interest_rate/Interest Rate Data.xlsx` has full monthly coverage through **2025**
+(Jan-Dec) and **2026 Jan-Apr only** — May and June 2026 are entirely absent. The scoring join
+(`PredictionDataPreperation.py`'s interest-rate merge, keyed on `['LoanType','Year','Month','Term',
+'FICO','LTV']`) and its group-means fallback both key on `Year`/`Month`, so when scoring June 2026
+(`Year=2026, Month=6`), neither the direct join nor the fallback can find any match — confirmed
+empirically: null rate is 1.0 for every `LoanType`, all 71,378+ scoring rows. The *training* side is
+mostly unaffected (Dec'25/Jan'26/Feb'26 snapshots are all covered, ~3.1% null per the EDA).
+
+**Why this matters a lot:** this is the single feature the EDA showed has the strongest, most
+economically sensible relationship with the actual target (refi rate jumps to ~20%/~13% when this
+delta exceeds 1 — see `reports/figures/refi_rate_by_rate_delta.png`). Losing it entirely at scoring
+time plausibly explains the erratic first-pass results (FHA showing near-zero recall, Conventional
+showing 100% flagged — different trees handle a feature that's "always missing at scoring, rarely
+missing at training" very differently, and a `NaN < -1` override-rule comparison is always `False`,
+silently disabling one of F12's three override rules for every loan).
+
+**Not yet fixed — needs a decision, not a guess:** options are (a) carry forward the most recent
+available rate (April 2026) as a proxy for May/June, (b) go back to Gokulnath/data engineering for
+a fresher rate pull through June 2026, or (c) proceed with the feature null and treat it as a
+further, large documented limitation of this baseline. Raised with Prajwal before continuing Step 4.
 
 ## Hypotheses tested for F1 (pred_prob / y_pred mismatch)
 
