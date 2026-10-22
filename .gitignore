@@ -2,6 +2,8 @@
 # **/ prefix so this matches data/real/ at repo root AND nested, e.g. backtest/*/data/real/
 **/data/real/
 outputs/
+data_preperation/Input/
+inference_data/
 *.xlsx
 *.xls
 *.xlsm
@@ -15,6 +17,10 @@ outputs/
 *.pickle
 *.joblib
 models/
+
+# ---- Generated deliverable documents (share directly, don't commit) ----
+*.docx
+*.doc
 
 # ---- Secrets ----
 .env
@@ -48,13 +54,3 @@ build/
 Thumbs.db
 .vscode/
 .idea/
-
-# Data - never commit
-data_preperation/Input/
-*.csv
-*.xlsx
-*.parquet
-*.pkl
-.venv/
-.env
-inference_data/
